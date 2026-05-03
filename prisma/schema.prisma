@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String?
+  passwordHash      String?
+  avatar            String?
+  timezone          String    @default("UTC")
+  preferredLanguage String    @default("en")
+  onboardingDone    Boolean   @default(false)
+  twoFactorEnabled  Boolean   @default(false)
+  twoFactorSecret   String?
+  failedTotpAttempts Int      @default(0)
+  totpLockedUntil   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  webauthnCreds  WebAuthnCredential[]
+  conversations  Conversation[]
+  vaultEntries   VaultEntry[]
+  consentToggles ConsentToggle[]
+  auditEntries   AuditEntry[]
+  notifications  Notification[]
+  escalations    Escalation[]
+  profile        UserProfile?
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model WebAuthnCredential {
+  id              String   @id @default(cuid())
+  userId          String
+  credentialId    String   @unique
+  publicKey       String
+  counter         Int      @default(0)
+  transports      String[] @default([])
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("webauthn_credentials")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  personaId String
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, personaId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+model VaultEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  entryType     String
+  encryptedData String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, entryType])
+  @@map("vault_entries")
+}
+
+model ConsentToggle {
+  id           String   @id @default(cuid())
+  userId       String
+  dataFieldId  String
+  enabled      Boolean  @default(false)
+  personaScope String   @default("both")
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dataFieldId, personaScope])
+  @@map("consent_toggles")
+}
+
+model AuditEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  actionType   String
+  resource     String
+  resourceId   String?
+  personaId    String?
+  metadata     Json?
+  hash         String
+  previousHash String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, actionType])
+  @@index([userId, createdAt])
+  @@map("audit_entries")
+}
+
+model Notification {
+  id               String   @id @default(cuid())
+  userId           String
+  type             String
+  title            String
+  body             String
+  read             Boolean  @default(false)
+  linkedResource   String?
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id               String  @id @default(cuid())
+  userId           String
+  notificationType String
+  enabled          Boolean @default(true)
+  pushEnabled      Boolean @default(false)
+
+  @@unique([userId, notificationType])
+  @@map("notification_preferences")
+}
+
+model Escalation {
+  id                  String   @id @default(cuid())
+  userId              String
+  personaId           String
+  originalQuery       String
+  preliminaryResponse String?
+  escalationReason    String
+  status              String   @default("pending")
+  resolution          String?
+  resolvedBy          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("escalations")
+}
+
+model UserProfile {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  riskTolerance         String?
+  investmentGoals       String?
+  incomeRange           String?
+  wellnessInterests     String[] @default([])
+  dietaryPreferences    String[] @default([])
+  favoriteCategories    String[] @default([])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
